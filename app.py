@@ -1,10 +1,13 @@
-# app.py - EDA para Render - Datos Normalizados
+# app.py - VERSIÓN COMPLETA OPTIMIZADA PARA RENDER
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import os
+import warnings
+warnings.filterwarnings('ignore')
 
 # Configuración para Render
 st.set_page_config(
@@ -13,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS optimizado
+# CSS optimizado pero completo
 st.markdown("""
     <style>
     .main { 
@@ -58,24 +61,29 @@ st.markdown("""
         margin: 10px 0;
         border: 1px solid rgba(255,255,255,0.2);
     }
+    /* Optimizaciones para Render */
+    .stDataFrame { 
+        font-size: 0.9em; 
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # -------------------------
-# CARGAR Y NORMALIZAR DATOS - OPTIMIZADO PARA RENDER
+# CARGAR Y NORMALIZAR DATOS - OPTIMIZADO PERO COMPLETO
 # -------------------------
-@st.cache_data(ttl=3600)  # Cache por 1 hora para Render
+@st.cache_data(ttl=3600)
 def load_and_normalize_data():
-    """Carga y normaliza el dataset corrigiendo inconsistencias"""
+    """Carga y normaliza datos con manejo robusto de errores"""
     try:
-        # Cargar datos
+        # Intentar cargar archivo real
         df = pd.read_csv("Base_Completa_zona.csv")
+        st.success("✅ Archivo de datos cargado correctamente")
         
         # Limpiar nombres de columnas
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
         
-        # Tomar solo las filas con datos reales (primeras 100)
-        df = df.head(100).copy()
+        # Limitar datos para Render (más eficiente)
+        df = df.head(200).copy()
         
         # Filtrar filas válidas
         df = df[
@@ -84,10 +92,9 @@ def load_and_normalize_data():
             ~df['sucursal'].astype(str).str.lower().str.contains('total')
         ].copy()
         
-        # 🔥 NORMALIZACIÓN: Corregir "cesar" a "Cesar"
+        # Normalización de texto
         df['sucursal'] = df['sucursal'].str.strip().str.title()
         
-        # Normalizar otras columnas de texto
         text_columns = ['oficina', 'segmento', 'nombre_cliente']
         for col in text_columns:
             if col in df.columns:
@@ -101,198 +108,120 @@ def load_and_normalize_data():
         numeric_columns = ['cap_2024', 'cap_2025', 'diferencia', 'crec', 'colocacion', 'recaudo', 'nomina', 'margen']
         for col in numeric_columns:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         return df
-    
-    except FileNotFoundError:
-        st.error("❌ No se encontró el archivo 'Base_Completa_zona.csv'")
-        st.info("""
-        **Solución para Render:**
-        1. Asegúrate de que el archivo esté en el repositorio de GitHub
-        2. Verifica que el nombre sea exactamente 'Base_Completa_zona.csv'
-        3. En Render, el archivo debe estar en la raíz del proyecto
-        """)
-        return None
-    except Exception as e:
-        st.error(f"❌ Error cargando los datos: {e}")
-        return None
-
-# -------------------------
-# BÚSQUEDA POR ID
-# -------------------------
-def search_by_id(df):
-    """Búsqueda directa por ID de cliente"""
-    st.sidebar.markdown("---")
-    st.sidebar.header("🔍 Búsqueda por ID")
-    
-    # Input para ID
-    id_buscado = st.sidebar.text_input("Ingresa el ID del cliente:", placeholder="Ej: 12345")
-    
-    if id_buscado and id_buscado.strip():
-        id_buscado = id_buscado.strip()
-        resultados = df[df['id_cliente'].astype(str).str.contains(id_buscado, case=False, na=False)]
         
-        if len(resultados) > 0:
-            st.sidebar.success(f"✅ Encontrado: {len(resultados)} cliente(s)")
-            
-            if len(resultados) == 1:
-                cliente = resultados.iloc[0]
-                if st.sidebar.button("📊 Ver Análisis Detallado"):
-                    st.session_state['cliente_detalle'] = cliente
-                    st.session_state['mostrar_detalle'] = True
-            else:
-                for idx, row in resultados.iterrows():
-                    if st.sidebar.button(f"👤 {row['id_cliente']} - {row['nombre_cliente']}", key=f"btn_{row['id_cliente']}"):
-                        st.session_state['cliente_detalle'] = row
-                        st.session_state['mostrar_detalle'] = True
-        else:
-            st.sidebar.warning("❌ No se encontró ningún cliente con ese ID")
+    except FileNotFoundError:
+        st.warning("📁 No se encontró el archivo CSV. Generando datos de ejemplo...")
+        return generate_sample_data()
+    except Exception as e:
+        st.error(f"❌ Error cargando datos: {e}")
+        st.info("📋 Usando datos de ejemplo para continuar...")
+        return generate_sample_data()
 
-# -------------------------
-# ANÁLISIS INDIVIDUAL DE VARIABLES
-# -------------------------
-def analyze_variable(df, variable, nombre_variable):
-    """Análisis individual para cada variable financiera"""
+def generate_sample_data():
+    """Genera datos de ejemplo completos y realistas"""
+    np.random.seed(42)
+    n_clients = 150
     
-    st.subheader(f"📈 Análisis de {nombre_variable}")
-    
-    if variable not in df.columns:
-        st.warning(f"La variable {variable} no está disponible en los datos")
-        return
-    
-    # Filtrar valores válidos
-    df_valido = df[df[variable].notna()].copy()
-    
-    if len(df_valido) == 0:
-        st.warning(f"No hay datos válidos para {nombre_variable}")
-        return
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(f"Total {nombre_variable}", 
-                 f"${df_valido[variable].sum():,.0f}" if variable != 'crec' else f"{df_valido[variable].mean():.2%}")
-    
-    with col2:
-        st.metric(f"Promedio {nombre_variable}", 
-                 f"${df_valido[variable].mean():,.0f}" if variable != 'crec' else f"{df_valido[variable].mean():.2%}")
-    
-    with col3:
-        st.metric(f"Máximo {nombre_variable}", 
-                 f"${df_valido[variable].max():,.0f}" if variable != 'crec' else f"{df_valido[variable].max():.2%}")
-    
-    with col4:
-        st.metric(f"Mínimo {nombre_variable}", 
-                 f"${df_valido[variable].min():,.0f}" if variable != 'crec' else f"{df_valido[variable].min():.2%}")
-    
-    # Gráficos
-    col_chart1, col_chart2 = st.columns(2)
-    
-    with col_chart1:
-        # Histograma
-        fig = px.histogram(df_valido, x=variable, 
-                          title=f"Distribución de {nombre_variable}",
-                          nbins=20)
-        fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col_chart2:
-        # Box plot
-        fig = px.box(df_valido, y=variable, 
-                    title=f"Distribución - {nombre_variable}")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Top 10 por variable
-    st.subheader(f"🏆 Top 10 Clientes por {nombre_variable}")
-    top_clientes = df_valido.nlargest(10, variable)[['id_cliente', 'nombre_cliente', 'sucursal', variable]].copy()
-    
-    # Formatear valores
-    if variable != 'crec':
-        top_clientes[variable] = top_clientes[variable].apply(lambda x: f"${x:,.0f}")
-    else:
-        top_clientes[variable] = top_clientes[variable].apply(lambda x: f"{x:.2%}")
-    
-    st.dataframe(top_clientes, use_container_width=True)
-    
-    # Análisis por sucursal
-    st.subheader(f"🏢 {nombre_variable} por Sucursal")
-    sucursal_stats = df_valido.groupby('sucursal')[variable].agg(['sum', 'mean', 'count']).round(2)
-    
-    if variable != 'crec':
-        sucursal_stats['sum'] = sucursal_stats['sum'].apply(lambda x: f"${x:,.0f}")
-        sucursal_stats['mean'] = sucursal_stats['mean'].apply(lambda x: f"${x:,.0f}")
-    else:
-        sucursal_stats['sum'] = sucursal_stats['sum'].apply(lambda x: f"{x:.2%}")
-        sucursal_stats['mean'] = sucursal_stats['mean'].apply(lambda x: f"{x:.2%}")
-    
-    st.dataframe(sucursal_stats, use_container_width=True)
-
-# -------------------------
-# ANÁLISIS COMPLETO DE VARIABLES
-# -------------------------
-def show_comprehensive_analysis(df):
-    """Análisis completo de todas las variables"""
-    
-    st.header("📊 Análisis Completo por Variable")
-    
-    # Selector de variable
-    variables = {
-        'cap_2024': 'CAP 2024',
-        'cap_2025': 'CAP 2025', 
-        'diferencia': 'Diferencia CAP',
-        'crec': 'Crecimiento (%)',
-        'colocacion': 'Colocación',
-        'recaudo': 'Recaudo',
-        'nomina': 'Nómina',
-        'margen': 'Margen'
+    data = {
+        'id_cliente': [f'CLI{str(i).zfill(5)}' for i in range(1, n_clients+1)],
+        'sucursal': np.random.choice(['Cesar', 'Magdalena', 'Guajira', 'Atlantico', 'Bolivar'], n_clients, p=[0.3, 0.25, 0.2, 0.15, 0.1]),
+        'oficina': np.random.choice(['Oficina Central', 'Oficina Norte', 'Oficina Sur', 'Oficina Este'], n_clients),
+        'segmento': np.random.choice(['Corporate', 'Personal', 'PYME', 'Empresarial'], n_clients, p=[0.4, 0.3, 0.2, 0.1]),
+        'nombre_cliente': [f'Cliente Corporativo {i}' if i % 3 == 0 else f'Cliente Personal {i}' if i % 3 == 1 else f'Empresa PYME {i}' for i in range(1, n_clients+1)],
+        'cap_2024': np.random.lognormal(14, 1.2, n_clients).astype(int),
+        'cap_2025': np.random.lognormal(14.3, 1.1, n_clients).astype(int),
     }
     
-    # Filtrar variables disponibles
-    variables_disponibles = {k: v for k, v in variables.items() if k in df.columns}
+    df = pd.DataFrame(data)
     
-    variable_seleccionada = st.selectbox(
-        "Selecciona la variable a analizar:",
-        options=list(variables_disponibles.keys()),
-        format_func=lambda x: variables_disponibles[x]
-    )
+    # Calcular métricas derivadas
+    df['diferencia'] = df['cap_2025'] - df['cap_2024']
+    df['crec'] = (df['diferencia'] / df['cap_2024']).round(4)
     
-    if variable_seleccionada:
-        analyze_variable(df, variable_seleccionada, variables_disponibles[variable_seleccionada])
+    # Métricas adicionales realistas
+    df['colocacion'] = (df['cap_2024'] * np.random.uniform(0.1, 0.8, n_clients)).astype(int)
+    df['recaudo'] = (df['cap_2024'] * np.random.uniform(0.05, 0.6, n_clients)).astype(int)
+    df['nomina'] = (df['cap_2024'] * np.random.uniform(0.02, 0.3, n_clients)).astype(int)
+    df['margen'] = (df['cap_2024'] * np.random.uniform(0.01, 0.2, n_clients)).astype(int)
+    
+    # Asegurar que no haya valores negativos
+    numeric_cols = ['cap_2024', 'cap_2025', 'colocacion', 'recaudo', 'nomina', 'margen']
+    for col in numeric_cols:
+        df[col] = df[col].abs()
+    
+    return df
 
 # -------------------------
-# SISTEMA DE FILTROS INTERACTIVOS - OPTIMIZADO
+# BÚSQUEDA POR ID - MEJORADA
 # -------------------------
-def setup_filters(df):
-    """Configura el sistema de filtros en cascada"""
+def setup_id_search(df):
+    """Sistema de búsqueda por ID mejorado"""
+    st.sidebar.markdown("---")
+    st.sidebar.header("🔍 Búsqueda Rápida por ID")
     
-    st.sidebar.header("🎛️ Filtros Interactivos")
-    st.sidebar.info("✅ Datos normalizados: 'cesar' → 'Cesar'")
+    col_search1, col_search2 = st.sidebar.columns([2, 1])
+    
+    with col_search1:
+        id_buscado = st.text_input("ID Cliente:", placeholder="Ej: CLI00123", key="search_id")
+    
+    with col_search2:
+        st.write("")  # Espacio
+        if st.button("Buscar", key="search_btn"):
+            if id_buscado and id_buscado.strip():
+                resultados = df[df['id_cliente'].astype(str).str.contains(id_buscado.strip(), case=False, na=False)]
+                if len(resultados) > 0:
+                    st.session_state['search_results'] = resultados
+                    st.session_state['show_search_results'] = True
+                else:
+                    st.session_state['search_results'] = None
+                    st.session_state['show_search_results'] = False
+                    st.sidebar.warning("❌ No encontrado")
+    
+    # Mostrar resultados de búsqueda
+    if st.session_state.get('show_search_results', False) and st.session_state.get('search_results') is not None:
+        resultados = st.session_state['search_results']
+        st.sidebar.success(f"✅ {len(resultados)} cliente(s) encontrado(s)")
+        
+        for idx, row in resultados.iterrows():
+            btn_label = f"{row['id_cliente']} - {row['nombre_cliente'][:20]}..."
+            if st.sidebar.button(btn_label, key=f"result_{row['id_cliente']}"):
+                st.session_state['selected_client'] = row
+                st.session_state['show_client_detail'] = True
+
+# -------------------------
+# SISTEMA DE FILTROS COMPLETO
+# -------------------------
+def setup_complete_filters(df):
+    """Sistema de filtros completo y optimizado"""
+    st.sidebar.header("🎛️ Filtros Avanzados")
     
     # Filtro 1: Sucursal
     sucursales = ['Todas'] + sorted(df['sucursal'].dropna().unique().tolist())
     sucursal_seleccionada = st.sidebar.selectbox(
-        "📍 Selecciona Sucursal:",
+        "📍 Sucursal:",
         sucursales,
-        key="sucursal"
+        key="sucursal_filter"
     )
     
-    # Filtrar datos basado en Sucursal
+    # Aplicar filtro de sucursal
     if sucursal_seleccionada != 'Todas':
         df_filtrado = df[df['sucursal'] == sucursal_seleccionada].copy()
     else:
         df_filtrado = df.copy()
     
-    # Filtro 2: Oficina
+    # Filtro 2: Oficina (dependiente de sucursal)
     if len(df_filtrado) > 0:
         oficinas_disponibles = ['Todas'] + sorted(df_filtrado['oficina'].dropna().unique().tolist())
     else:
         oficinas_disponibles = ['Todas']
     
     oficina_seleccionada = st.sidebar.selectbox(
-        "🏢 Selecciona Oficina:",
+        "🏢 Oficina:",
         oficinas_disponibles,
-        key="oficina"
+        key="oficina_filter"
     )
     
     if oficina_seleccionada != 'Todas':
@@ -305,259 +234,353 @@ def setup_filters(df):
         segmentos_disponibles = ['Todos']
     
     segmento_seleccionado = st.sidebar.selectbox(
-        "📊 Selecciona Segmento:",
+        "📊 Segmento:",
         segmentos_disponibles,
-        key="segmento"
+        key="segmento_filter"
     )
     
     if segmento_seleccionado != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['segmento'] == segmento_seleccionado]
     
-    # Filtro 4: Cliente específico
-    if len(df_filtrado) > 0:
-        opciones_clientes = ['Todos']
-        for idx, row in df_filtrado.iterrows():
-            if pd.notna(row['id_cliente']) and row['id_cliente'] not in ['', 'nan']:
-                opcion = f"{row['id_cliente']} - {row['nombre_cliente']}"
-            else:
-                opcion = row['nombre_cliente']
-            opciones_clientes.append(opcion)
-        
-        cliente_seleccionado = st.sidebar.selectbox(
-            "👤 Selecciona Cliente:",
-            opciones_clientes,
-            key="cliente"
-        )
-        
-        if cliente_seleccionado != 'Todos':
-            if ' - ' in cliente_seleccionado:
-                id_seleccionado = cliente_seleccionado.split(' - ')[0]
-                df_filtrado = df_filtrado[df_filtrado['id_cliente'] == id_seleccionado]
-            else:
-                df_filtrado = df_filtrado[df_filtrado['nombre_cliente'] == cliente_seleccionado]
+    # Filtro 4: Rango de CAP
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("💰 Filtros por CAP")
+    
+    cap_min, cap_max = st.sidebar.slider(
+        "Rango CAP 2025:",
+        min_value=float(df['cap_2025'].min()),
+        max_value=float(df['cap_2025'].max()),
+        value=(float(df['cap_2025'].min()), float(df['cap_2025'].max())),
+        key="cap_filter"
+    )
+    
+    df_filtrado = df_filtrado[(df_filtrado['cap_2025'] >= cap_min) & (df_filtrado['cap_2025'] <= cap_max)]
     
     return df_filtrado
 
 # -------------------------
-# ANÁLISIS DE DATOS - OPTIMIZADO PARA RENDER
+# ANÁLISIS POR VARIABLE COMPLETO
 # -------------------------
-def show_filtered_analysis(df_filtrado, df_original):
-    """Muestra análisis basado en los filtros seleccionados"""
+def analyze_variable_complete(df, variable, nombre_variable):
+    """Análisis completo de cada variable financiera"""
     
-    st.header("📈 Análisis de Datos Filtrados")
+    st.header(f"📈 Análisis Detallado: {nombre_variable}")
     
-    # Información del filtro
-    st.write(f"**Mostrando:** {len(df_filtrado)} de {len(df_original)} clientes")
-    
-    if len(df_filtrado) == 0:
-        st.warning("⚠️ No hay datos que coincidan con los filtros seleccionados")
+    if variable not in df.columns:
+        st.warning(f"⚠️ La variable '{variable}' no está disponible")
         return
     
-    # Métricas principales
+    df_valido = df[df[variable].notna()].copy()
+    
+    if len(df_valido) == 0:
+        st.warning("No hay datos válidos para analizar")
+        return
+    
+    # MÉTRICAS PRINCIPALES
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("👥 Clientes", len(df_filtrado))
+        total = df_valido[variable].sum()
+        st.metric("Total", f"${total:,.0f}" if variable != 'crec' else f"{total:.2%}")
     
     with col2:
-        total_cap_2024 = df_filtrado['cap_2024'].sum() if 'cap_2024' in df_filtrado.columns else 0
-        st.metric("💰 CAP 2024", f"${total_cap_2024:,.0f}")
+        promedio = df_valido[variable].mean()
+        st.metric("Promedio", f"${promedio:,.0f}" if variable != 'crec' else f"{promedio:.2%}")
     
     with col3:
-        total_cap_2025 = df_filtrado['cap_2025'].sum() if 'cap_2025' in df_filtrado.columns else 0
-        st.metric("💰 CAP 2025", f"${total_cap_2025:,.0f}")
+        maximo = df_valido[variable].max()
+        st.metric("Máximo", f"${maximo:,.0f}" if variable != 'crec' else f"{maximo:.2%}")
     
     with col4:
-        crecimiento_total = (total_cap_2025 - total_cap_2024) / total_cap_2024 if total_cap_2024 > 0 else 0
-        st.metric("📈 Crecimiento", f"{crecimiento_total:.2%}")
+        minimo = df_valido[variable].min()
+        st.metric("Mínimo", f"${minimo:,.0f}" if variable != 'crec' else f"{minimo:.2%}")
     
-    # Datos filtrados
-    st.subheader("📋 Datos Filtrados")
+    # GRÁFICOS AVANZADOS
+    st.subheader("📊 Visualizaciones")
+    col_chart1, col_chart2 = st.columns(2)
     
-    columnas_a_mostrar = ['id_cliente', 'sucursal', 'oficina', 'segmento', 'nombre_cliente', 
-                         'cap_2024', 'cap_2025', 'diferencia', 'crec']
+    with col_chart1:
+        # Histograma con percentiles
+        fig_hist = px.histogram(df_valido, x=variable, 
+                               title=f"Distribución de {nombre_variable}",
+                               nbins=20,
+                               color_discrete_sequence=['#1f77b4'])
+        fig_hist.update_layout(showlegend=False)
+        st.plotly_chart(fig_hist, use_container_width=True)
     
-    columnas_adicionales = ['colocacion', 'recaudo', 'nomina', 'margen']
-    for col in columnas_adicionales:
-        if col in df_filtrado.columns:
-            columnas_a_mostrar.append(col)
+    with col_chart2:
+        # Box plot
+        fig_box = px.box(df_valido, y=variable, 
+                        title=f"Distribución - {nombre_variable}",
+                        color_discrete_sequence=['#ff7f0e'])
+        st.plotly_chart(fig_box, use_container_width=True)
     
-    df_mostrar = df_filtrado[columnas_a_mostrar].copy()
+    # ANÁLISIS POR SUCURSAL
+    st.subheader("🏢 Análisis por Sucursal")
+    sucursal_analysis = df_valido.groupby('sucursal').agg({
+        variable: ['sum', 'mean', 'count', 'std']
+    }).round(2)
     
-    # Formatear números
-    for col in df_mostrar.select_dtypes(include=[np.number]).columns:
-        if col not in ['id_cliente', 'crec']:
-            df_mostrar[col] = df_mostrar[col].apply(lambda x: f"${x:,.0f}" if pd.notna(x) and abs(x) >= 1000 else f"{x:.2f}" if pd.notna(x) else "N/A")
-        elif col == 'crec':
-            df_mostrar[col] = df_mostrar[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+    sucursal_analysis.columns = ['Total', 'Promedio', 'Clientes', 'Desviación']
+    st.dataframe(sucursal_analysis, use_container_width=True)
     
-    st.dataframe(df_mostrar, use_container_width=True, height=400)
+    # TOP 10 CLIENTES
+    st.subheader(f"🏆 Top 10 Clientes por {nombre_variable}")
+    top_clientes = df_valido.nlargest(10, variable)[['id_cliente', 'nombre_cliente', 'sucursal', variable]].copy()
     
-    # Análisis gráfico
-    if len(df_filtrado) > 1:
-        show_multiple_analysis(df_filtrado)
-    elif len(df_filtrado) == 1:
-        show_single_client_analysis(df_filtrado.iloc[0])
+    # Formatear valores para display
+    if variable != 'crec':
+        top_clientes[variable] = top_clientes[variable].apply(lambda x: f"${x:,.0f}")
+    else:
+        top_clientes[variable] = top_clientes[variable].apply(lambda x: f"{x:.2%}")
+    
+    st.dataframe(top_clientes, use_container_width=True)
 
-def show_multiple_analysis(df_filtrado):
-    """Análisis para múltiples clientes"""
-    
-    st.subheader("📊 Análisis Comparativo")
+# -------------------------
+# ANÁLISIS COMPARATIVO COMPLETO
+# -------------------------
+def show_comparative_analysis(df):
+    """Análisis comparativo entre variables"""
+    st.header("🔄 Análisis Comparativo")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Gráfico de CAP por sucursal
-        cap_por_sucursal = df_filtrado.groupby('sucursal')[['cap_2024', 'cap_2025']].sum().reset_index()
-        fig = px.bar(cap_por_sucursal, x='sucursal', y=['cap_2024', 'cap_2025'],
-                    title="CAP por Sucursal", barmode='group')
-        st.plotly_chart(fig, use_container_width=True)
+        # Correlación entre variables principales
+        numeric_cols = ['cap_2024', 'cap_2025', 'colocacion', 'recaudo', 'nomina', 'margen']
+        available_numeric = [col for col in numeric_cols if col in df.columns]
+        
+        if len(available_numeric) >= 2:
+            corr_matrix = df[available_numeric].corr()
+            fig_corr = px.imshow(corr_matrix, 
+                               title="Matriz de Correlación",
+                               color_continuous_scale='RdBu_r',
+                               aspect="auto")
+            st.plotly_chart(fig_corr, use_container_width=True)
     
     with col2:
-        # Gráfico de segmentos
-        segmento_counts = df_filtrado['segmento'].value_counts()
-        fig = px.pie(values=segmento_counts.values, names=segmento_counts.index,
-                    title="Distribución por Segmento")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Top clientes
-    if len(df_filtrado) > 5:
-        st.subheader("🏆 Top 10 Clientes por CAP 2025")
-        top_clientes = df_filtrado.nlargest(10, 'cap_2025')
-        top_clientes['etiqueta'] = top_clientes['id_cliente'] + ' - ' + top_clientes['nombre_cliente'].str.slice(0, 30)
-        
-        fig = px.bar(top_clientes, x='etiqueta', y='cap_2025',
-                    title="Top 10 Clientes", labels={'etiqueta': 'Cliente'})
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-
-def show_single_client_analysis(cliente):
-    """Análisis para cliente individual"""
-    
-    st.subheader(f"👤 Análisis Detallado: {cliente['id_cliente']} - {cliente['nombre_cliente']}")
-    
-    col_info1, col_info2 = st.columns(2)
-    
-    with col_info1:
-        st.write(f"**ID Cliente:** {cliente['id_cliente']}")
-        st.write(f"**Sucursal:** {cliente['sucursal']}")
-    
-    with col_info2:
-        st.write(f"**Oficina:** {cliente['oficina']}")
-        st.write(f"**Segmento:** {cliente['segmento']}")
-    
-    # Métricas detalladas
-    st.subheader("📊 Métricas Financieras")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    metricas = [
-        ('CAP 2024', 'cap_2024', '💰'),
-        ('CAP 2025', 'cap_2025', '💰'),
-        ('Diferencia', 'diferencia', '📈'),
-        ('Crecimiento', 'crec', '📊'),
-        ('Colocación', 'colocacion', '💵'),
-        ('Recaudo', 'recaudo', '🔄'),
-        ('Nómina', 'nomina', '👥'),
-        ('Margen', 'margen', '📊')
-    ]
-    
-    for i, (nombre, columna, emoji) in enumerate(metricas):
-        if columna in cliente and pd.notna(cliente[columna]):
-            valor = cliente[columna]
-            if columna == 'crec':
-                valor_formateado = f"{valor:.2%}"
-            else:
-                valor_formateado = f"${valor:,.0f}" if abs(valor) >= 1000 else f"${valor:.2f}"
-            
-            if i < 4:
-                with col1:
-                    st.metric(f"{emoji} {nombre}", valor_formateado)
-            elif i < 8:
-                with col2:
-                    st.metric(f"{emoji} {nombre}", valor_formateado)
+        # Scatter plot CAP 2024 vs CAP 2025
+        if 'cap_2024' in df.columns and 'cap_2025' in df.columns:
+            fig_scatter = px.scatter(df, x='cap_2024', y='cap_2025',
+                                   color='segmento',
+                                   title="CAP 2024 vs CAP 2025",
+                                   hover_data=['nombre_cliente'],
+                                   size_max=15)
+            st.plotly_chart(fig_scatter, use_container_width=True)
 
 # -------------------------
-# ESTADÍSTICAS GENERALES
+# DASHBOARD PRINCIPAL
 # -------------------------
-def show_general_stats(df):
-    """Estadísticas generales"""
+def show_main_dashboard(df):
+    """Dashboard principal completo"""
+    st.header("📊 Dashboard Ejecutivo")
     
-    st.header("📊 Estadísticas Generales")
-    st.success("✅ Datos normalizados: 'cesar' corregido a 'Cesar'")
-    
-    col1, col2, col3 = st.columns(3)
+    # KPI PRINCIPALES
+    st.subheader("🎯 KPIs Principales")
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        st.subheader("🏢 Sucursales")
-        for sucursal, count in df['sucursal'].value_counts().items():
-            st.write(f"**{sucursal}:** {count} clientes")
+        total_clientes = len(df)
+        st.metric("Total Clientes", f"{total_clientes:,}")
     
     with col2:
-        st.subheader("📈 Segmentos")
-        for segmento, count in df['segmento'].value_counts().items():
-            st.write(f"**{segmento}:** {count} clientes")
+        cap_2024_total = df['cap_2024'].sum()
+        st.metric("CAP 2024 Total", f"${cap_2024_total:,.0f}")
     
     with col3:
-        st.subheader("💰 Totales")
-        st.metric("Clientes", len(df))
-        st.metric("CAP 2024", f"${df['cap_2024'].sum():,.0f}")
-        st.metric("CAP 2025", f"${df['cap_2025'].sum():,.0f}")
+        cap_2025_total = df['cap_2025'].sum()
+        st.metric("CAP 2025 Total", f"${cap_2025_total:,.0f}")
+    
+    with col4:
+        crecimiento_promedio = df['crec'].mean() * 100
+        st.metric("Crecimiento Promedio", f"{crecimiento_promedio:.1f}%")
+    
+    with col5:
+        total_colocacion = df['colocacion'].sum() if 'colocacion' in df.columns else 0
+        st.metric("Colocación Total", f"${total_colocacion:,.0f}")
+    
+    # GRÁFICOS PRINCIPALES
+    st.subheader("📈 Tendencias Principales")
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        # Evolución por sucursal
+        sucursal_evolution = df.groupby('sucursal')[['cap_2024', 'cap_2025']].sum().reset_index()
+        fig_evolution = px.bar(sucursal_evolution, x='sucursal', y=['cap_2024', 'cap_2025'],
+                              title="Evolución CAP por Sucursal", barmode='group')
+        st.plotly_chart(fig_evolution, use_container_width=True)
+    
+    with col_chart2:
+        # Distribución por segmento
+        segmento_dist = df['segmento'].value_counts()
+        fig_segment = px.pie(values=segmento_dist.values, names=segmento_dist.index,
+                           title="Distribución por Segmento de Clientes")
+        st.plotly_chart(fig_segment, use_container_width=True)
+    
+    # ANÁLISIS COMPARATIVO
+    show_comparative_analysis(df)
+
+# -------------------------
+# VISTA DETALLE CLIENTE
+# -------------------------
+def show_client_detail(client_data):
+    """Vista detallada de cliente individual"""
+    st.header(f"👤 Perfil Cliente: {client_data['id_cliente']}")
+    
+    # Información básica
+    col_info1, col_info2, col_info3 = st.columns(3)
+    
+    with col_info1:
+        st.subheader("📋 Información General")
+        st.write(f"**ID:** {client_data['id_cliente']}")
+        st.write(f"**Nombre:** {client_data['nombre_cliente']}")
+        st.write(f"**Sucursal:** {client_data['sucursal']}")
+    
+    with col_info2:
+        st.subheader("🏢 Ubicación")
+        st.write(f"**Oficina:** {client_data['oficina']}")
+        st.write(f"**Segmento:** {client_data['segmento']}")
+    
+    with col_info3:
+        st.subheader("📊 Estado")
+        crecimiento = client_data['crec'] * 100
+        st.write(f"**Crecimiento:** {crecimiento:.1f}%")
+        st.write(f"**Diferencia CAP:** ${client_data['diferencia']:,.0f}")
+    
+    # MÉTRICAS FINANCIERAS
+    st.subheader("💰 Métricas Financieras")
+    
+    metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+    
+    financial_metrics = [
+        ('CAP 2024', 'cap_2024', '💰', metrics_col1),
+        ('CAP 2025', 'cap_2025', '📈', metrics_col1),
+        ('Colocación', 'colocacion', '💵', metrics_col2),
+        ('Recaudo', 'recaudo', '🔄', metrics_col2),
+        ('Nómina', 'nomina', '👥', metrics_col3),
+        ('Margen', 'margen', '📊', metrics_col3),
+        ('Diferencia', 'diferencia', '⚖️', metrics_col4),
+        ('Crecimiento', 'crec', '🎯', metrics_col4)
+    ]
+    
+    for nombre, campo, emoji, col in financial_metrics:
+        if campo in client_data and pd.notna(client_data[campo]):
+            valor = client_data[campo]
+            if campo == 'crec':
+                valor_formateado = f"{valor:.2%}"
+            else:
+                valor_formateado = f"${valor:,.0f}"
+            col.metric(f"{emoji} {nombre}", valor_formateado)
 
 # -------------------------
 # APLICACIÓN PRINCIPAL
 # -------------------------
 def main():
-    st.title("🏦 Análisis Financiero - Datos Normalizados")
-    st.markdown("Sistema de análisis interactivo para datos financieros")
-    
     # Inicializar session state
-    if 'mostrar_detalle' not in st.session_state:
-        st.session_state['mostrar_detalle'] = False
-    if 'cliente_detalle' not in st.session_state:
-        st.session_state['cliente_detalle'] = None
+    if 'show_client_detail' not in st.session_state:
+        st.session_state['show_client_detail'] = False
+    if 'selected_client' not in st.session_state:
+        st.session_state['selected_client'] = None
+    if 'show_search_results' not in st.session_state:
+        st.session_state['show_search_results'] = False
+    
+    # Título principal
+    st.title("🏦 Análisis Financiero Completo")
+    st.markdown("Sistema avanzado de análisis de datos financieros con capacidades completas de EDA")
     
     # Cargar datos
-    with st.spinner("Cargando datos..."):
+    with st.spinner("🔄 Cargando y procesando datos..."):
         df = load_and_normalize_data()
     
     if df is None:
+        st.error("No se pudieron cargar los datos. Por favor verifica el archivo.")
         return
     
-    # Sidebar info
-    st.sidebar.header("📊 Dataset Info")
-    st.sidebar.write(f"**Clientes:** {len(df)}")
-    st.sidebar.write(f"**Sucursales:** {len(df['sucursal'].unique())}")
-    
-    # Búsqueda por ID
-    search_by_id(df)
-    
-    # Filtros
-    df_filtrado = setup_filters(df)
+    # Sidebar - Búsqueda y Filtros
+    setup_id_search(df)
+    df_filtrado = setup_complete_filters(df)
     
     # Navegación principal
-    tab1, tab2, tab3 = st.tabs(["📈 Análisis Filtrado", "📊 Análisis por Variable", "📋 Estadísticas Generales"])
+    if st.session_state.get('show_client_detail', False) and st.session_state.get('selected_client') is not None:
+        # Vista de detalle de cliente
+        show_client_detail(st.session_state['selected_client'])
+        if st.button("↩️ Volver al Dashboard Principal"):
+            st.session_state['show_client_detail'] = False
+            st.session_state['selected_client'] = None
+            st.rerun()
+    else:
+        # Dashboard principal con pestañas
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Dashboard Principal", 
+            "🔍 Análisis por Variable", 
+            "📋 Datos Completos",
+            "📈 Análisis Comparativo"
+        ])
+        
+        with tab1:
+            show_main_dashboard(df_filtrado)
+        
+        with tab2:
+            st.header("📊 Análisis Individual por Variable")
+            
+            variables_completas = {
+                'cap_2024': 'CAP 2024',
+                'cap_2025': 'CAP 2025', 
+                'diferencia': 'Diferencia CAP',
+                'crec': 'Crecimiento (%)',
+                'colocacion': 'Colocación',
+                'recaudo': 'Recaudo',
+                'nomina': 'Nómina',
+                'margen': 'Margen'
+            }
+            
+            variables_disponibles = {k: v for k, v in variables_completas.items() if k in df_filtrado.columns}
+            
+            if variables_disponibles:
+                variable_seleccionada = st.selectbox(
+                    "Selecciona la variable a analizar:",
+                    options=list(variables_disponibles.keys()),
+                    format_func=lambda x: variables_disponibles[x]
+                )
+                
+                if variable_seleccionada:
+                    analyze_variable_complete(df_filtrado, variable_seleccionada, variables_disponibles[variable_seleccionada])
+            else:
+                st.warning("No hay variables disponibles para análisis")
+        
+        with tab3:
+            st.header("📋 Base de Datos Completa")
+            st.write(f"**Total de registros mostrados:** {len(df_filtrado)}")
+            
+            # Selección de columnas a mostrar
+            columnas_base = ['id_cliente', 'sucursal', 'oficina', 'segmento', 'nombre_cliente']
+            columnas_financieras = [col for col in ['cap_2024', 'cap_2025', 'diferencia', 'crec', 'colocacion', 'recaudo', 'nomina', 'margen'] 
+                                  if col in df_filtrado.columns]
+            
+            columnas_seleccionadas = st.multiselect(
+                "Selecciona columnas a mostrar:",
+                options=columnas_base + columnas_financieras,
+                default=columnas_base + columnas_financieras[:4]
+            )
+            
+            if columnas_seleccionadas:
+                df_display = df_filtrado[columnas_seleccionadas].copy()
+                
+                # Formatear números para mejor visualización
+                for col in df_display.select_dtypes(include=[np.number]).columns:
+                    if col == 'crec':
+                        df_display[col] = df_display[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+                    else:
+                        df_display[col] = df_display[col].apply(lambda x: f"${x:,.0f}" if pd.notna(x) and abs(x) >= 1000 else f"${x:.2f}" if pd.notna(x) else "N/A")
+                
+                st.dataframe(df_display, use_container_width=True, height=600)
+        
+        with tab4:
+            show_comparative_analysis(df_filtrado)
     
-    with tab1:
-        # Mostrar detalle de cliente si está seleccionado
-        if st.session_state['mostrar_detalle'] and st.session_state['cliente_detalle'] is not None:
-            show_single_client_analysis(st.session_state['cliente_detalle'])
-            if st.button("↩️ Volver al análisis general"):
-                st.session_state['mostrar_detalle'] = False
-                st.session_state['cliente_detalle'] = None
-                st.rerun()
-        else:
-            show_filtered_analysis(df_filtrado, df)
-    
-    with tab2:
-        show_comprehensive_analysis(df)
-    
-    with tab3:
-        show_general_stats(df)
-    
-    # Footer para Render
+    # Footer informativo
     st.markdown("---")
-    st.markdown("*Análisis Financiero v2.0 - Con análisis individual de variables y búsqueda por ID*")
+
 
 if __name__ == "__main__":
     main()
