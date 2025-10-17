@@ -368,10 +368,10 @@ def show_comparative_analysis(df):
 # DASHBOARD PRINCIPAL
 # -------------------------
 def show_main_dashboard(df):
-    """Dashboard principal completo"""
+    """Dashboard principal completo - CORREGIDO"""
     st.header("📊 Dashboard Ejecutivo")
     
-    # KPI PRINCIPALES
+    # KPI PRINCIPALES - CÁLCULOS CORREGIDOS
     st.subheader("🎯 KPIs Principales")
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -388,8 +388,25 @@ def show_main_dashboard(df):
         st.metric("CAP 2025 Total", f"${cap_2025_total:,.0f}")
     
     with col4:
-        crecimiento_promedio = df['crec'].mean() * 100
-        st.metric("Crecimiento Promedio", f"{crecimiento_promedio:.1f}%")
+        # ✅ CÁLCULO ROBUSTO DEL CRECIMIENTO
+        cap_total_2024 = df['cap_2024'].sum()
+        cap_total_2025 = df['cap_2025'].sum()
+        
+        if cap_total_2024 > 0:
+            crecimiento_total = ((cap_total_2025 - cap_total_2024) / cap_total_2024) * 100
+        else:
+            crecimiento_total = 0
+        
+        # Validar que el crecimiento sea razonable
+        if abs(crecimiento_total) > 1000:  # Si es mayor a 1000%, probable error
+            # Intentar cálculo alternativo con promedio de crecimientos individuales
+            crecimiento_promedio = df['crec'].mean() * 100
+            if abs(crecimiento_promedio) < 1000:  # Si este es razonable, usarlo
+                crecimiento_total = crecimiento_promedio
+            else:
+                crecimiento_total = 0  # Fallback
+        
+        st.metric("Crecimiento Total", f"{crecimiento_total:.1f}%")
     
     with col5:
         total_colocacion = df['colocacion'].sum() if 'colocacion' in df.columns else 0
@@ -412,6 +429,30 @@ def show_main_dashboard(df):
         fig_segment = px.pie(values=segmento_dist.values, names=segmento_dist.index,
                            title="Distribución por Segmento de Clientes")
         st.plotly_chart(fig_segment, use_container_width=True, key="segment_pie")
+    
+    # ANÁLISIS ADICIONAL DE CRECIMIENTO
+    st.subheader("📊 Análisis de Crecimiento Detallado")
+    
+    col_crec1, col_crec2 = st.columns(2)
+    
+    with col_crec1:
+        # Crecimiento por sucursal
+        crecimiento_sucursal = df.groupby('sucursal').apply(
+            lambda x: ((x['cap_2025'].sum() - x['cap_2024'].sum()) / x['cap_2024'].sum() * 100) if x['cap_2024'].sum() > 0 else 0
+        ).round(1)
+        
+        fig_crec_sucursal = px.bar(x=crecimiento_sucursal.index, y=crecimiento_sucursal.values,
+                                  title="Crecimiento por Sucursal (%)",
+                                  labels={'x': 'Sucursal', 'y': 'Crecimiento %'})
+        st.plotly_chart(fig_crec_sucursal, use_container_width=True, key="growth_by_branch")
+    
+    with col_crec2:
+        # Distribución de crecimiento individual
+        crecimiento_individual = df['crec'] * 100
+        fig_crec_dist = px.histogram(x=crecimiento_individual, 
+                                    title="Distribución de Crecimientos Individuales",
+                                    labels={'x': 'Crecimiento %', 'y': 'Número de Clientes'})
+        st.plotly_chart(fig_crec_dist, use_container_width=True, key="growth_distribution")
 
 # -------------------------
 # VISTA DETALLE CLIENTE
