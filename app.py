@@ -1,4 +1,4 @@
-# app.py - VERSIÓN COMPLETA OPTIMIZADA PARA RENDER
+# app.py - VERSIÓN CORREGIDA CON KEYS ÚNICOS
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -61,15 +61,11 @@ st.markdown("""
         margin: 10px 0;
         border: 1px solid rgba(255,255,255,0.2);
     }
-    /* Optimizaciones para Render */
-    .stDataFrame { 
-        font-size: 0.9em; 
-    }
     </style>
 """, unsafe_allow_html=True)
 
 # -------------------------
-# CARGAR Y NORMALIZAR DATOS - OPTIMIZADO PERO COMPLETO
+# CARGAR Y NORMALIZAR DATOS
 # -------------------------
 @st.cache_data(ttl=3600)
 def load_and_normalize_data():
@@ -306,14 +302,14 @@ def analyze_variable_complete(df, variable, nombre_variable):
                                nbins=20,
                                color_discrete_sequence=['#1f77b4'])
         fig_hist.update_layout(showlegend=False)
-        st.plotly_chart(fig_hist, use_container_width=True)
+        st.plotly_chart(fig_hist, use_container_width=True, key=f"hist_{variable}")
     
     with col_chart2:
         # Box plot
         fig_box = px.box(df_valido, y=variable, 
                         title=f"Distribución - {nombre_variable}",
                         color_discrete_sequence=['#ff7f0e'])
-        st.plotly_chart(fig_box, use_container_width=True)
+        st.plotly_chart(fig_box, use_container_width=True, key=f"box_{variable}")
     
     # ANÁLISIS POR SUCURSAL
     st.subheader("🏢 Análisis por Sucursal")
@@ -356,7 +352,7 @@ def show_comparative_analysis(df):
                                title="Matriz de Correlación",
                                color_continuous_scale='RdBu_r',
                                aspect="auto")
-            st.plotly_chart(fig_corr, use_container_width=True)
+            st.plotly_chart(fig_corr, use_container_width=True, key="correlation_matrix")
     
     with col2:
         # Scatter plot CAP 2024 vs CAP 2025
@@ -366,7 +362,7 @@ def show_comparative_analysis(df):
                                    title="CAP 2024 vs CAP 2025",
                                    hover_data=['nombre_cliente'],
                                    size_max=15)
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.plotly_chart(fig_scatter, use_container_width=True, key="scatter_cap")
 
 # -------------------------
 # DASHBOARD PRINCIPAL
@@ -408,17 +404,14 @@ def show_main_dashboard(df):
         sucursal_evolution = df.groupby('sucursal')[['cap_2024', 'cap_2025']].sum().reset_index()
         fig_evolution = px.bar(sucursal_evolution, x='sucursal', y=['cap_2024', 'cap_2025'],
                               title="Evolución CAP por Sucursal", barmode='group')
-        st.plotly_chart(fig_evolution, use_container_width=True)
+        st.plotly_chart(fig_evolution, use_container_width=True, key="evolution_bar")
     
     with col_chart2:
         # Distribución por segmento
         segmento_dist = df['segmento'].value_counts()
         fig_segment = px.pie(values=segmento_dist.values, names=segmento_dist.index,
                            title="Distribución por Segmento de Clientes")
-        st.plotly_chart(fig_segment, use_container_width=True)
-    
-    # ANÁLISIS COMPARATIVO
-    show_comparative_analysis(df)
+        st.plotly_chart(fig_segment, use_container_width=True, key="segment_pie")
 
 # -------------------------
 # VISTA DETALLE CLIENTE
@@ -540,7 +533,8 @@ def main():
                 variable_seleccionada = st.selectbox(
                     "Selecciona la variable a analizar:",
                     options=list(variables_disponibles.keys()),
-                    format_func=lambda x: variables_disponibles[x]
+                    format_func=lambda x: variables_disponibles[x],
+                    key="var_selector"
                 )
                 
                 if variable_seleccionada:
@@ -560,7 +554,8 @@ def main():
             columnas_seleccionadas = st.multiselect(
                 "Selecciona columnas a mostrar:",
                 options=columnas_base + columnas_financieras,
-                default=columnas_base + columnas_financieras[:4]
+                default=columnas_base + columnas_financieras[:4],
+                key="column_selector"
             )
             
             if columnas_seleccionadas:
@@ -579,8 +574,5 @@ def main():
             show_comparative_analysis(df_filtrado)
     
     # Footer informativo
-    st.markdown("---")
-
-
 if __name__ == "__main__":
     main()
