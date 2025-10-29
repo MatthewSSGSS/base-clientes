@@ -1,4 +1,4 @@
-# app.py - VERSIÓN CORREGIDA SIN ERRORES
+# app.py - VERSIÓN CON ANÁLISIS GENERAL ESTRUCTURADO EN TABLAS
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -22,6 +22,27 @@ st.markdown("""
     .main { background-color: #0f1720; color: #ffffff; }
     .block-container { padding: 1rem; max-width: 100%; }
     .stButton>button { background-color: #1f77b4; color: white; border: none; padding: 10px 24px; border-radius: 5px; width: 100%; }
+    .metric-card { 
+        background: rgba(255,255,255,0.05); 
+        padding: 15px; 
+        border-radius: 8px; 
+        margin: 5px; 
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .analysis-section { 
+        background: rgba(255,255,255,0.03); 
+        padding: 20px; 
+        border-radius: 10px; 
+        margin: 15px 0; 
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .data-table { 
+        background: rgba(255,255,255,0.02); 
+        border-radius: 8px; 
+        padding: 10px;
+        margin: 10px 0;
+    }
     .correlation-high { background-color: rgba(0, 255, 0, 0.1); padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .correlation-medium { background-color: rgba(255, 255, 0, 0.1); padding: 2px 6px; border-radius: 4px; }
     .correlation-low { background-color: rgba(255, 0, 0, 0.1); padding: 2px 6px; border-radius: 4px; }
@@ -64,7 +85,7 @@ def load_and_normalize_data():
         if 'id_cliente' in df.columns:
             df['id_cliente'] = df['id_cliente'].astype(str).str.strip()
         
-        # Limpiar valores numéricos
+        # Limpiar valores numéricas
         numeric_columns = ['cap_2024', 'cap_2025', 'diferencia', 'crec', 'colocacion', 'recaudo', 'nomina', 'margen']
         for col in numeric_columns:
             if col in df.columns:
@@ -186,10 +207,10 @@ def setup_complete_filters(df):
     return df_filtrado
 
 # -------------------------
-# ANÁLISIS COMPLETO - CORREGIDO
+# ANÁLISIS COMPLETO - ESTRUCTURADO EN TABLAS
 # -------------------------
 def show_comprehensive_analysis(df):
-    """Análisis general completo con todas las variables y correlaciones"""
+    """Análisis general completo estructurado en tablas organizadas"""
     st.header("📊 Análisis General Completo")
     
     # DEFINIR TODAS LAS VARIABLES FINANCIERAS
@@ -207,162 +228,186 @@ def show_comprehensive_analysis(df):
     # Filtrar solo las variables disponibles
     available_vars = {k: v for k, v in financial_variables.items() if k in df.columns}
     
-    # KPI PRINCIPALES - TODAS LAS VARIABLES
-    st.subheader("🎯 KPIs Principales - Todas las Variables")
+    # SECCIÓN 1: RESUMEN EJECUTIVO
+    with st.container():
+        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+        st.subheader("🎯 Resumen Ejecutivo")
+        
+        # KPIs principales en columnas
+        cols = st.columns(4)
+        metrics_data = []
+        
+        for idx, (var_key, var_name) in enumerate(available_vars.items()):
+            col_idx = idx % 4
+            with cols[col_idx]:
+                if var_key == 'crec':
+                    valor = df[var_key].mean() * 100
+                    st.metric(f"📈 {var_name}", f"{valor:.2f}%")
+                    metrics_data.append({'Variable': var_name, 'Valor': f"{valor:.2f}%", 'Tipo': 'Porcentaje'})
+                else:
+                    valor = df[var_key].sum()
+                    st.metric(f"💰 {var_name}", f"${valor:,.0f}")
+                    metrics_data.append({'Variable': var_name, 'Valor': f"${valor:,.0f}", 'Tipo': 'Monetario'})
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    # Crear métricas para cada variable
-    num_cols = 4
-    cols = st.columns(num_cols)
+    # SECCIÓN 2: ESTADÍSTICAS DESCRIPTIVAS DETALLADAS
+    with st.container():
+        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+        st.subheader("📋 Estadísticas Descriptivas Detalladas")
+        
+        # Crear tabla de estadísticas
+        stats_data = []
+        for var_key, var_name in available_vars.items():
+            if var_key in df.columns:
+                if var_key == 'crec':
+                    stats = {
+                        'Variable': var_name,
+                        'N° Clientes': df[var_key].count(),
+                        'Promedio': f"{df[var_key].mean() * 100:.2f}%",
+                        'Máximo': f"{df[var_key].max() * 100:.2f}%",
+                        'Mínimo': f"{df[var_key].min() * 100:.2f}%",
+                        'Desviación Estándar': f"{df[var_key].std() * 100:.2f}%",
+                        'Mediana': f"{df[var_key].median() * 100:.2f}%"
+                    }
+                else:
+                    stats = {
+                        'Variable': var_name,
+                        'N° Clientes': df[var_key].count(),
+                        'Total': f"${df[var_key].sum():,.0f}",
+                        'Promedio': f"${df[var_key].mean():,.0f}",
+                        'Máximo': f"${df[var_key].max():,.0f}",
+                        'Mínimo': f"${df[var_key].min():,.0f}",
+                        'Desviación Estándar': f"${df[var_key].std():,.0f}",
+                        'Mediana': f"${df[var_key].median():,.0f}"
+                    }
+                stats_data.append(stats)
+        
+        stats_df = pd.DataFrame(stats_data)
+        st.dataframe(stats_df, use_container_width=True, height=400)
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    for idx, (var_key, var_name) in enumerate(available_vars.items()):
-        col_idx = idx % num_cols
-        with cols[col_idx]:
-            if var_key == 'crec':
-                valor = df[var_key].mean() * 100
-                st.metric(f"📈 {var_name}", f"{valor:.2f}%")
-            else:
-                valor = df[var_key].sum()
-                st.metric(f"💰 {var_name}", f"${valor:,.0f}")
-    
-    # ESTADÍSTICAS DESCRIPTIVAS COMPLETAS
-    st.subheader("📋 Estadísticas Descriptivas Completas")
-    
-    stats_data = []
-    for var_key, var_name in available_vars.items():
-        if var_key in df.columns:
-            stats = {
-                'Variable': var_name,
-                'Clientes': df[var_key].count(),
-                'Total': df[var_key].sum() if var_key != 'crec' else 'N/A',
-                'Promedio': df[var_key].mean() if var_key != 'crec' else df[var_key].mean() * 100,
-                'Máximo': df[var_key].max(),
-                'Mínimo': df[var_key].min(),
-                'Desviación': df[var_key].std()
+    # SECCIÓN 3: DISTRIBUCIÓN POR SUCURSAL
+    with st.container():
+        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+        st.subheader("🏢 Distribución por Sucursal")
+        
+        # Tabla de resumen por sucursal
+        sucursal_data = []
+        for sucursal in df['sucursal'].unique():
+            df_sucursal = df[df['sucursal'] == sucursal]
+            sucursal_info = {
+                'Sucursal': sucursal,
+                'N° Clientes': len(df_sucursal),
+                'CAP 2024 Total': f"${df_sucursal['cap_2024'].sum():,.0f}",
+                'CAP 2025 Total': f"${df_sucursal['cap_2025'].sum():,.0f}",
+                'Crecimiento Promedio': f"{(df_sucursal['cap_2025'].sum() - df_sucursal['cap_2024'].sum()) / df_sucursal['cap_2024'].sum() * 100:.1f}%" if df_sucursal['cap_2024'].sum() > 0 else "0%",
+                'Colocación Total': f"${df_sucursal['colocacion'].sum():,.0f}" if 'colocacion' in df_sucursal.columns else "N/A"
             }
-            stats_data.append(stats)
-    
-    stats_df = pd.DataFrame(stats_data)
-    
-    # Formatear números para mejor visualización
-    for idx, row in stats_df.iterrows():
-        if row['Variable'] != 'Crecimiento %':
-            if stats_df.at[idx, 'Total'] != 'N/A':
-                stats_df.at[idx, 'Total'] = f"${float(stats_df.at[idx, 'Total']):,.0f}"
-                stats_df.at[idx, 'Promedio'] = f"${float(stats_df.at[idx, 'Promedio']):,.0f}"
-                stats_df.at[idx, 'Máximo'] = f"${float(stats_df.at[idx, 'Máximo']):,.0f}"
-                stats_df.at[idx, 'Mínimo'] = f"${float(stats_df.at[idx, 'Mínimo']):,.0f}"
-                stats_df.at[idx, 'Desviación'] = f"${float(stats_df.at[idx, 'Desviación']):,.0f}"
-        else:
-            stats_df.at[idx, 'Promedio'] = f"{float(stats_df.at[idx, 'Promedio']):.2f}%"
-    
-    st.dataframe(stats_df, use_container_width=True)
-    
-    # ANÁLISIS DE CORRELACIONES CRUZADAS
-    st.subheader("🔄 Análisis de Correlaciones Cruzadas")
-    
-    col_corr1, col_corr2 = st.columns(2)
-    
-    with col_corr1:
-        var_x = st.selectbox(
-            "Variable X:",
-            options=list(available_vars.keys()),
-            format_func=lambda x: available_vars[x],
-            key="corr_x"
-        )
-    
-    with col_corr2:
-        var_y = st.selectbox(
-            "Variable Y:",
-            options=list(available_vars.keys()),
-            format_func=lambda x: available_vars[x],
-            index=1 if len(available_vars) > 1 else 0,
-            key="corr_y"
-        )
-    
-    if var_x and var_y and var_x != var_y:
-        show_correlation_analysis(df, var_x, var_y, available_vars[var_x], available_vars[var_y])
-    
-    # MATRIZ DE CORRELACIÓN COMPLETA
-    st.subheader("🔗 Matriz de Correlación Completa")
-    
-    numeric_vars = [var for var in available_vars.keys() if var in df.select_dtypes(include=[np.number]).columns]
-    
-    if len(numeric_vars) >= 2:
-        corr_matrix = df[numeric_vars].corr()
+            sucursal_data.append(sucursal_info)
         
-        fig_corr = px.imshow(
-            corr_matrix,
-            title="Matriz de Correlación entre Variables Financieras",
-            color_continuous_scale='RdBu_r',
-            aspect="auto",
-            labels=dict(color="Correlación")
-        )
+        sucursal_df = pd.DataFrame(sucursal_data)
+        st.dataframe(sucursal_df, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # SECCIÓN 4: ANÁLISIS POR SEGMENTO
+    with st.container():
+        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+        st.subheader("📊 Análisis por Segmento de Clientes")
         
-        fig_corr.update_xaxes(ticktext=[available_vars.get(var, var) for var in numeric_vars],
-                             tickvals=list(range(len(numeric_vars))))
-        fig_corr.update_yaxes(ticktext=[available_vars.get(var, var) for var in numeric_vars],
-                             tickvals=list(range(len(numeric_vars))))
+        if 'segmento' in df.columns:
+            segmento_data = []
+            for segmento in df['segmento'].unique():
+                df_segmento = df[df['segmento'] == segmento]
+                segmento_info = {
+                    'Segmento': segmento,
+                    'N° Clientes': len(df_segmento),
+                    '% del Total': f"{(len(df_segmento) / len(df)) * 100:.1f}%",
+                    'CAP Promedio': f"${df_segmento['cap_2025'].mean():,.0f}",
+                    'Colocación Promedio': f"${df_segmento['colocacion'].mean():,.0f}" if 'colocacion' in df_segmento.columns else "N/A",
+                    'Crecimiento Promedio': f"{df_segmento['crec'].mean() * 100:.1f}%",
+                    'Valor Total': f"${df_segmento['cap_2025'].sum():,.0f}"
+                }
+                segmento_data.append(segmento_info)
+            
+            segmento_df = pd.DataFrame(segmento_data)
+            st.dataframe(segmento_df, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # SECCIÓN 5: TOP CLIENTES
+    with st.container():
+        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+        st.subheader("🏆 Top 10 Clientes por Variables Clave")
         
-        st.plotly_chart(fig_corr, use_container_width=True, key="full_correlation_matrix")
+        # Tabs para diferentes métricas
+        tab1, tab2, tab3, tab4 = st.tabs(["📈 CAP 2025", "💰 Colocación", "🔄 Crecimiento", "💵 Margen"])
         
-        # Análisis interpretativo de correlaciones
-        st.subheader("📈 Interpretación de Correlaciones")
+        with tab1:
+            top_cap = df.nlargest(10, 'cap_2025')[['id_cliente', 'nombre_cliente', 'sucursal', 'segmento', 'cap_2025']].copy()
+            top_cap['cap_2025'] = top_cap['cap_2025'].apply(lambda x: f"${x:,.0f}")
+            st.dataframe(top_cap, use_container_width=True)
         
-        strong_correlations = []
-        for i in range(len(corr_matrix.columns)):
-            for j in range(i+1, len(corr_matrix.columns)):
-                corr_value = corr_matrix.iloc[i, j]
-                if abs(corr_value) > 0.5:
-                    var1 = available_vars.get(numeric_vars[i], numeric_vars[i])
-                    var2 = available_vars.get(numeric_vars[j], numeric_vars[j])
-                    strong_correlations.append((var1, var2, corr_value))
+        with tab2:
+            if 'colocacion' in df.columns:
+                top_colocacion = df.nlargest(10, 'colocacion')[['id_cliente', 'nombre_cliente', 'sucursal', 'segmento', 'colocacion']].copy()
+                top_colocacion['colocacion'] = top_colocacion['colocacion'].apply(lambda x: f"${x:,.0f}")
+                st.dataframe(top_colocacion, use_container_width=True)
         
-        if strong_correlations:
-            st.write("**🔍 Correlaciones Fuertes Identificadas:**")
-            for var1, var2, corr in strong_correlations:
-                correlation_class = "correlation-high" if abs(corr) > 0.7 else "correlation-medium"
-                st.markdown(f"- **{var1}** ↔ **{var2}**: <span class='{correlation_class}'>r = {corr:.3f}</span>", 
-                           unsafe_allow_html=True)
-        else:
-            st.info("No se encontraron correlaciones fuertes (|r| > 0.5) entre las variables.")
-
-def show_correlation_analysis(df, var_x, var_y, label_x, label_y):
-    """Análisis detallado de correlación entre dos variables"""
+        with tab3:
+            top_crecimiento = df.nlargest(10, 'crec')[['id_cliente', 'nombre_cliente', 'sucursal', 'segmento', 'crec']].copy()
+            top_crecimiento['crec'] = top_crecimiento['crec'].apply(lambda x: f"{x:.2%}")
+            st.dataframe(top_crecimiento, use_container_width=True)
+        
+        with tab4:
+            if 'margen' in df.columns:
+                top_margen = df.nlargest(10, 'margen')[['id_cliente', 'nombre_cliente', 'sucursal', 'segmento', 'margen']].copy()
+                top_margen['margen'] = top_margen['margen'].apply(lambda x: f"${x:,.0f}")
+                st.dataframe(top_margen, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown(f"**🔍 Análisis de Correlación: {label_x} vs {label_y}**")
-    
-    # Calcular correlación
-    correlation = df[var_x].corr(df[var_y])
-    
-    col_corr_metrics1, col_corr_metrics2, col_corr_metrics3 = st.columns(3)
-    
-    with col_corr_metrics1:
-        st.metric("Coeficiente de Correlación", f"{correlation:.3f}")
-    
-    with col_corr_metrics2:
-        # Interpretación de la correlación
-        if abs(correlation) > 0.7:
-            interpretacion = "Fuerte"
-        elif abs(correlation) > 0.3:
-            interpretacion = "Moderada"
-        else:
-            interpretacion = "Débil"
-        st.metric("Intensidad", interpretacion)
-    
-    with col_corr_metrics3:
-        direccion = "Positiva" if correlation > 0 else "Negativa"
-        st.metric("Dirección", direccion)
-    
-    # Scatter plot de correlación
-    fig_scatter = px.scatter(df, x=var_x, y=var_y,
-                           title=f"Relación: {label_x} vs {label_y}",
-                           trendline="ols",  # Esta línea usa plotly internamente, no statsmodels
-                           hover_data=['nombre_cliente', 'sucursal'] if 'nombre_cliente' in df.columns else None,
-                           color='segmento' if 'segmento' in df.columns else None)
-    
-    fig_scatter.update_traces(marker=dict(size=8, opacity=0.6))
-    
-    st.plotly_chart(fig_scatter, use_container_width=True, key=f"scatter_{var_x}_{var_y}")
+    # SECCIÓN 6: CORRELACIONES
+    with st.container():
+        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+        st.subheader("🔗 Análisis de Correlaciones")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # Matriz de correlación
+            numeric_vars = [var for var in available_vars.keys() if var in df.select_dtypes(include=[np.number]).columns]
+            if len(numeric_vars) >= 2:
+                corr_matrix = df[numeric_vars].corr()
+                fig_corr = px.imshow(
+                    corr_matrix,
+                    title="Matriz de Correlación",
+                    color_continuous_scale='RdBu_r',
+                    aspect="auto"
+                )
+                st.plotly_chart(fig_corr, use_container_width=True)
+        
+        with col2:
+            # Correlaciones fuertes identificadas
+            st.subheader("📈 Correlaciones Destacadas")
+            strong_correlations = []
+            if len(numeric_vars) >= 2:
+                for i in range(len(corr_matrix.columns)):
+                    for j in range(i+1, len(corr_matrix.columns)):
+                        corr_value = corr_matrix.iloc[i, j]
+                        if abs(corr_value) > 0.5:
+                            var1 = available_vars.get(numeric_vars[i], numeric_vars[i])
+                            var2 = available_vars.get(numeric_vars[j], numeric_vars[j])
+                            strong_correlations.append({
+                                'Variables': f"{var1} - {var2}",
+                                'Correlación': f"{corr_value:.3f}",
+                                'Intensidad': 'Alta' if abs(corr_value) > 0.7 else 'Media'
+                            })
+            
+            if strong_correlations:
+                corr_df = pd.DataFrame(strong_correlations)
+                st.dataframe(corr_df, use_container_width=True)
+            else:
+                st.info("No se encontraron correlaciones fuertes (|r| > 0.5)")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------
 # DASHBOARD PRINCIPAL
@@ -406,7 +451,7 @@ def show_main_dashboard(df):
     show_comprehensive_analysis(df)
 
 # -------------------------
-# FUNCIONES RESTANTES (simplificadas)
+# FUNCIONES RESTANTES (mantenidas igual)
 # -------------------------
 def analyze_variable_complete(df, variable, nombre_variable):
     """Análisis completo de cada variable financiera"""
